@@ -1,0 +1,91 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "构建模式"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - debug
+      split_per_abi:
+        description: "是否按 ABI 拆分 APK"
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "lib/**"
+      - "android/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/android-apk.yml"
+  pull_request:
+    paths:
+      - "lib/**"
+      - "android/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # 当前项目 pubspec 环境是 Dart >=3.11.x，使用 Flutter stable 最新版兼容性最好
+          channel: stable
+          cache: true
+
+      - name: Flutter Version
+        run: flutter --version
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build APK (manual trigger)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.build_mode }}" = "release" ]; then
+            MODE_FLAG="--release"
+          else
+            MODE_FLAG="--debug"
+          fi
+
+          if [ "${{ github.event.inputs.split_per_abi }}" = "true" ]; then
+            flutter build apk ${MODE_FLAG} --split-per-abi
+          else
+            flutter build apk ${MODE_FLAG}
+          fi
+
+      - name: Build APK (push/pr default release)
+        if: github.event_name != 'workflow_dispatch'
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error

@@ -127,3 +127,75 @@ class AIConfig {
   final Map<String, ProviderConfig> providers; // 提供商配置
 }
 ```
+
+---
+
+## GitHub 在线打包 APK（推荐）
+
+下面这套流程已经可直接用于你的仓库，适合**不在本地装 Android/Flutter 环境**时打包 APK。
+
+### 1) 我已经帮你补齐的关键点
+
+- 新增了 GitHub Actions 工作流：`.github/workflows/android-apk.yml`。
+- 工作流自动完成：
+  - 安装 JDK 17
+  - 安装 Flutter（stable）
+  - 拉取依赖 `flutter pub get`
+  - 执行测试 `flutter test`
+  - 构建 APK（支持 release/debug，支持 split-per-abi）
+  - 上传 APK 到 Actions Artifacts
+- 修复了一个常见 CI 阻塞项：
+  - 删除 `android/gradle.properties` 中原本固定在 Windows 本机路径的 `org.gradle.java.home=C:\\Program Files\\Java\\jdk-17.0.5`
+  - 这样 GitHub Linux Runner 才不会因为找不到本地 Windows 路径而失败。
+
+### 2) 第一次使用前（GitHub 网页操作）
+
+1. 把代码推送到 GitHub 仓库（`main` 或 `master` 分支）。
+2. 打开仓库的 **Actions** 标签页。首次使用时若提示启用，点击启用 Actions。
+3. 左侧找到工作流 **Build Android APK**。
+
+### 3) 手动在线打包（最常用）
+
+1. 进入 **Actions -> Build Android APK**。
+2. 点击 **Run workflow**。
+3. 参数说明：
+   - `build_mode`：
+     - `release`：正式包（推荐）
+     - `debug`：调试包
+   - `split_per_abi`：
+     - `false`：单个通用 APK
+     - `true`：按 CPU 架构拆分多个 APK（体积更小）
+4. 点击绿色 **Run workflow** 开始构建。
+
+### 4) 自动触发打包规则
+
+工作流还会在以下场景自动触发：
+
+- push 到 `main/master` 且改动了 `lib/**`、`android/**`、`pubspec.yaml` 等关键文件。
+- pull request 改动了同样这些关键文件。
+
+自动触发时默认构建 `release` APK。
+
+### 5) 在哪里下载 APK
+
+1. 打包完成后，打开这次 workflow run。
+2. 页面底部 **Artifacts** 区域会出现：`android-apk-<run_number>`。
+3. 下载压缩包后解压，可得到：
+   - `app-release.apk`（通用包）
+   - 或多个分 ABI 的 APK（如果你启用了 split-per-abi）
+
+### 6) 常见失败与排查
+
+- **Gradle/JDK 相关错误**：
+  - 已移除仓库中的固定本机 JDK 路径，通常可解决。
+- **依赖拉取失败**：
+  - 可能是网络抖动，重新 Run workflow 一次。
+- **测试失败导致无法产物**：
+  - 当前流程会先跑 `flutter test`，测试失败就会阻断打包（这是预期行为，防止坏包）。
+
+### 7) 可选增强（后续你想要我可以继续加）
+
+- 自动生成 `aab`（上架 Google Play 用）
+- 增加 keystore 签名（生成可直接发布的正式签名包）
+- 打 tag 时自动产出版本包（如 `v1.0.1`）
+- 把 APK 自动上传到 Release 页面
